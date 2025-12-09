@@ -119,6 +119,9 @@ pub struct File<'dir> {
 
     /// Whether this file is a "ghost" node (exists in manifest but not on disk).
     pub is_ghost: bool,
+
+    /// Whether this file is a "zone" (has a direct entry in the manifest).
+    pub is_zone: bool,
 }
 
 impl<'dir> File<'dir> {
@@ -167,6 +170,7 @@ impl<'dir> File<'dir> {
             extended_attributes: OnceLock::new(),
             absolute_path: OnceLock::new(),
             is_ghost: false,
+            is_zone: false,
         };
 
         if total_size {
@@ -205,6 +209,7 @@ impl<'dir> File<'dir> {
             extended_attributes: OnceLock::new(),
             filetype: OnceLock::new(),
             is_ghost: false,
+            is_zone: false,
         };
 
         if total_size {
@@ -228,6 +233,7 @@ impl<'dir> File<'dir> {
         path: PathBuf,
         parent_dir: &'dir Dir,
         name: String,
+        is_zone: bool,
     ) -> File<'dir> {
         let ext = File::ext(&path);
         let is_all_all = false;
@@ -247,6 +253,7 @@ impl<'dir> File<'dir> {
             extended_attributes: OnceLock::new(),
             filetype: OnceLock::new(),
             is_ghost: true,
+            is_zone,
         }
     }
 
@@ -538,6 +545,7 @@ impl<'dir> File<'dir> {
                     absolute_path: absolute_path_cell,
                     recursive_size: RecursiveSize::None,
                     is_ghost: false,
+                    is_zone: false,
                 };
                 FileTarget::Ok(Box::new(file))
             }

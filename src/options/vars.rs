@@ -81,6 +81,10 @@ pub static WLS_ICONS_AUTO: &str = "WLS_ICONS_AUTO";
 pub static EZA_STDIN_SEPARATOR: &str = "EZA_STDIN_SEPARATOR";
 pub static WLS_STDIN_SEPARATOR: &str = "WLS_STDIN_SEPARATOR";
 
+/// Environment variable used to disable zone sigils on directories.
+/// Any non-empty value will disable sigils.
+pub static WLS_NO_SIGILS: &str = "WLS_NO_SIGILS";
+
 /// Environment variable used to choose how windows attributes are displayed.
 /// Short will display a single character for each set attribute, long will
 /// display a comma separated list of descriptions.

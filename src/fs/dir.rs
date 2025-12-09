@@ -21,25 +21,48 @@ use crate::fs::File;
 #[derive(Deserialize)]
 struct Manifest {
     #[serde(flatten)]
-    entries: std::collections::HashMap<String, serde_json::Value>,
+    pub entries: std::collections::HashMap<String, serde_json::Value>,
 }
 
-fn get_ghosts<'dir>(dir: &'dir Dir) -> Vec<File<'dir>> {
-    // Canonicalize the path to handle both relative and absolute paths
-    let canonical_path = match dir.path.canonicalize() {
+/// Cached manifest information for a src root
+pub struct ManifestInfo {
+    pub src_root: PathBuf,
+    pub entries: HashSet<String>,
+}
+
+impl ManifestInfo {
+    /// Check if a target path (relative to `src_root`) is a zone
+    pub fn is_zone(&self, target_path: &str) -> bool {
+        self.entries.contains(target_path)
+    }
+
+    /// Build the target path string for a file given its canonical path
+    pub fn target_path_for(&self, canonical_path: &Path) -> Option<String> {
+        let rel_path = canonical_path.strip_prefix(&self.src_root).ok()?;
+        if rel_path.as_os_str().is_empty() {
+            None
+        } else {
+            Some(format!("//{}", rel_path.to_string_lossy()))
+        }
+    }
+}
+
+/// Find manifest by walking up from the given path looking for src/.meta/manifest.json
+pub fn find_manifest(start_path: &Path) -> Option<ManifestInfo> {
+    let canonical_path = match start_path.canonicalize() {
         Ok(p) => p,
         Err(e) => {
-            debug!("Failed to canonicalize path {:?}: {}", dir.path, e);
-            return vec![];
+            debug!("Failed to canonicalize path {start_path:?}: {e}");
+            return None;
         }
     };
-    
-    // 1. Find the src root and manifest
+
+    // Find the src root
     let mut current = canonical_path.as_path();
     let mut src_root = None;
-    
+
     loop {
-        if current.file_name().map_or(false, |n| n == "src") {
+        if current.file_name().is_some_and(|n| n == "src") {
             let manifest_path = current.join(".meta/manifest.json");
             if manifest_path.exists() {
                 src_root = Some(current.to_path_buf());
@@ -52,43 +75,52 @@ fn get_ghosts<'dir>(dir: &'dir Dir) -> Vec<File<'dir>> {
         }
     }
 
-    let src_root = match src_root {
-        Some(p) => p,
-        None => return vec![],
-    };
+    let src_root = src_root?;
 
-    // 2. Read manifest
+    // Read manifest
     let manifest_path = src_root.join(".meta/manifest.json");
     let file = match std::fs::File::open(&manifest_path) {
         Ok(f) => f,
         Err(e) => {
-            debug!("Failed to open manifest at {:?}: {}", manifest_path, e);
-            return vec![];
+            debug!("Failed to open manifest at {manifest_path:?}: {e}");
+            return None;
         }
     };
     let reader = io::BufReader::new(file);
     let manifest: Manifest = match serde_json::from_reader(reader) {
         Ok(m) => m,
         Err(e) => {
-            warn!("Failed to parse manifest at {:?}: {}", manifest_path, e);
-            return vec![];
+            warn!("Failed to parse manifest at {manifest_path:?}: {e}");
+            return None;
         }
     };
 
-    // 3. Determine relative path and prefix
-    let rel_path = match canonical_path.strip_prefix(&src_root) {
-        Ok(p) => p,
-        Err(_) => return vec![],
+    let entries: HashSet<String> = manifest.entries.keys().cloned().collect();
+
+    Some(ManifestInfo { src_root, entries })
+}
+
+fn get_ghosts<'dir>(dir: &'dir Dir, manifest_info: Option<&ManifestInfo>) -> Vec<File<'dir>> {
+    let Some(manifest_info) = manifest_info else {
+        return vec![];
     };
-    
+
+    let Ok(canonical_path) = dir.path.canonicalize() else {
+        return vec![];
+    };
+
+    // Determine relative path and prefix
+    let Ok(rel_path) = canonical_path.strip_prefix(&manifest_info.src_root) else {
+        return vec![];
+    };
+
     let prefix = if rel_path.as_os_str().is_empty() {
         "//".to_string()
     } else {
         format!("//{}/", rel_path.to_string_lossy())
     };
 
-    // 4. Identify ghost children (both direct and intermediate)
-    let mut ghosts = Vec::new();
+    // Identify ghost children (both direct and intermediate)
     let existing_names: HashSet<String> = dir.contents.iter()
         .map(|e| File::filename(&e.path()))
         .collect();
@@ -96,12 +128,12 @@ fn get_ghosts<'dir>(dir: &'dir Dir) -> Vec<File<'dir>> {
     // Track all intermediate directories we need to create ghosts for
     let mut ghost_names: HashSet<String> = HashSet::new();
 
-    for key in manifest.entries.keys() {
+    for key in &manifest_info.entries {
         if let Some(suffix) = key.strip_prefix(&prefix) {
             if !suffix.is_empty() {
                 // Get the first component of the path
                 let first_component = suffix.split('/').next().unwrap();
-                
+
                 // If this component doesn't exist physically, it should be a ghost
                 if !existing_names.contains(first_component) {
                     ghost_names.insert(first_component.to_string());
@@ -111,11 +143,14 @@ fn get_ghosts<'dir>(dir: &'dir Dir) -> Vec<File<'dir>> {
     }
 
     // Create ghost nodes for all identified names
+    let mut ghosts = Vec::new();
     for name in ghost_names {
         let ghost_path = dir.path.join(&name);
-        ghosts.push(File::new_ghost(ghost_path, dir, name));
+        // Check if this ghost is itself a zone
+        let ghost_target = format!("{prefix}{name}");
+        let is_zone = manifest_info.is_zone(&ghost_target);
+        ghosts.push(File::new_ghost(ghost_path, dir, name, is_zone));
     }
-
 
     ghosts
 }
@@ -190,10 +225,13 @@ impl Dir {
         total_size: bool,
         no_ghosts: bool,
     ) -> Files<'dir, 'ig> {
+        // Load manifest once for this directory
+        let manifest_info = find_manifest(&self.path);
+
         let ghosts = if no_ghosts {
             vec![]
         } else {
-            get_ghosts(self)
+            get_ghosts(self, manifest_info.as_ref())
         };
 
         Files {
@@ -206,6 +244,7 @@ impl Dir {
             deref_links,
             total_size,
             ghosts: ghosts.into_iter(),
+            manifest_info,
         }
     }
 
@@ -250,6 +289,9 @@ pub struct Files<'dir, 'ig> {
 
     /// Iterator over ghost files to be displayed
     ghosts: std::vec::IntoIter<File<'dir>>,
+
+    /// Manifest info for determining zone status
+    manifest_info: Option<ManifestInfo>,
 }
 
 impl<'dir> Files<'dir, '_> {
@@ -287,14 +329,26 @@ impl<'dir> Files<'dir, '_> {
                     }
                 }
 
-                let file = File::from_args(
-                    path,
+                let mut file = File::from_args(
+                    path.clone(),
                     self.dir,
                     filename,
                     self.deref_links,
                     self.total_size,
                     entry.file_type().ok(),
                 );
+
+                // Check if this file is a zone (only for directories)
+                if file.is_directory() {
+                    if let Some(ref manifest) = self.manifest_info {
+                        // Need to canonicalize the path for comparison with manifest entries
+                        if let Ok(canonical) = path.canonicalize() {
+                            if let Some(target_path) = manifest.target_path_for(&canonical) {
+                                file.is_zone = manifest.is_zone(&target_path);
+                            }
+                        }
+                    }
+                }
 
                 // Windows has its own concept of hidden files, when dotfiles are
                 // hidden Windows hidden files should also be filtered out
@@ -385,6 +439,64 @@ impl DotFilter {
             Self::JustFiles => DotsNext::Files,
             Self::Dotfiles => DotsNext::Files,
             Self::DotfilesAndDots => DotsNext::Dot,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    mod manifest_info {
+        use super::*;
+
+        fn make_manifest(entries: &[&str]) -> ManifestInfo {
+            ManifestInfo {
+                src_root: PathBuf::from("/test/src"),
+                entries: entries.iter().map(|s| s.to_string()).collect(),
+            }
+        }
+
+        #[test]
+        fn is_zone_returns_true_for_matching_entry() {
+            let manifest = make_manifest(&["//areas/tools/dev", "//areas/apps/flow"]);
+            assert!(manifest.is_zone("//areas/tools/dev"));
+            assert!(manifest.is_zone("//areas/apps/flow"));
+        }
+
+        #[test]
+        fn is_zone_returns_false_for_non_matching_entry() {
+            let manifest = make_manifest(&["//areas/tools/dev"]);
+            assert!(!manifest.is_zone("//areas/tools"));
+            assert!(!manifest.is_zone("//areas/tools/dev/subdir"));
+            assert!(!manifest.is_zone("//other/path"));
+        }
+
+        #[test]
+        fn target_path_for_builds_correct_path() {
+            let manifest = make_manifest(&[]);
+
+            let path = Path::new("/test/src/areas/tools/dev");
+            assert_eq!(
+                manifest.target_path_for(path),
+                Some("//areas/tools/dev".to_string())
+            );
+        }
+
+        #[test]
+        fn target_path_for_returns_none_for_src_root() {
+            let manifest = make_manifest(&[]);
+
+            let path = Path::new("/test/src");
+            assert_eq!(manifest.target_path_for(path), None);
+        }
+
+        #[test]
+        fn target_path_for_returns_none_for_path_outside_src() {
+            let manifest = make_manifest(&[]);
+
+            let path = Path::new("/other/path");
+            assert_eq!(manifest.target_path_for(path), None);
         }
     }
 }

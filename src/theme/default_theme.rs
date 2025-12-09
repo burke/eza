@@ -4,7 +4,7 @@
 // SPDX-FileCopyrightText: 2023-2024 Christina Sørensen, eza contributors
 // SPDX-FileCopyrightText: 2014 Benjamin Sago
 // SPDX-License-Identifier: MIT
-use nu_ansi_term::Color::{Blue, Cyan, DarkGray, Green, Purple, Red, Yellow};
+use nu_ansi_term::Color::{Blue, Cyan, DarkGray, Green, Purple, Red, White, Yellow};
 use nu_ansi_term::Style;
 use std::default::Default;
 
@@ -139,6 +139,9 @@ impl Default for UiStyles {
             control_char: Some(Red.normal()),
             broken_symlink: Some(Red.normal()),
             broken_path_overlay: Some(Style::default().underline()),
+
+            zone_sigil: Some(White.normal()),
+            zone_sigil_ghost: Some(DarkGray.normal()),
 
             filenames: None,
             extensions: None,

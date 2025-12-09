@@ -54,6 +54,7 @@ pub static ONLY_FILES:          Arg = Arg { short: Some(b'f'), long: "only-files
 pub static NO_SYMLINKS:         Arg = Arg { short: None,       long: "no-symlinks", takes_value: TakesValue::Forbidden };
 pub static SHOW_SYMLINKS:       Arg = Arg { short: None,     long: "show-symlinks", takes_value: TakesValue::Forbidden };
 pub static NO_GHOSTS:           Arg = Arg { short: None,     long: "no-ghosts",     takes_value: TakesValue::Forbidden };
+pub static NO_SIGILS:           Arg = Arg { short: None,     long: "no-sigils",     takes_value: TakesValue::Forbidden };
 
 const SORTS: Values = &[ "name", "Name", "size", "extension",
                          "Extension", "modified", "changed", "accessed",
@@ -111,7 +112,7 @@ pub static ALL_ARGS: Args = Args(&[
 
     &BINARY, &BYTES, &GROUP, &NUMERIC, &HEADER, &ICONS, &INODE, &LINKS, &MODIFIED, &CHANGED,
     &BLOCKSIZE, &TOTAL_SIZE, &TIME, &ACCESSED, &CREATED, &TIME_STYLE, &HYPERLINK, &MOUNTS,
-    &NO_PERMISSIONS, &NO_FILESIZE, &NO_USER, &NO_TIME, &SMART_GROUP, &NO_SYMLINKS, &SHOW_SYMLINKS, &NO_GHOSTS,
+    &NO_PERMISSIONS, &NO_FILESIZE, &NO_USER, &NO_TIME, &SMART_GROUP, &NO_SYMLINKS, &SHOW_SYMLINKS, &NO_GHOSTS, &NO_SIGILS,
 
     &GIT, &NO_GIT, &GIT_REPOS, &GIT_REPOS_NO_STAT,
     &EXTENDED, &OCTAL, &SECURITY_CONTEXT, &STDIN, &FILE_FLAGS

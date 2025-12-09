@@ -26,6 +26,10 @@ impl Options {
 
         let absolute = Absolute::deduce(matches)?;
 
+        // --no-sigils flag takes precedence, otherwise check env var
+        let no_sigils = matches.has(&flags::NO_SIGILS)?
+            || vars.get(vars::WLS_NO_SIGILS).is_some();
+
         Ok(Self {
             classify,
             show_icons,
@@ -33,6 +37,7 @@ impl Options {
             embed_hyperlinks,
             absolute,
             is_a_tty,
+            no_sigils,
         })
     }
 }

@@ -53,6 +53,9 @@ pub struct UiStyles {
     pub broken_symlink:       Option<Style>,  // or
     pub broken_path_overlay:  Option<Style>,  // bO
 
+    pub zone_sigil:           Option<Style>,  // zs - zone sigil for directories
+    pub zone_sigil_ghost:     Option<Style>,  // zg - zone sigil for ghost directories
+
     pub filenames: Option<HashMap<String, FileNameStyle>>,
     pub extensions: Option<HashMap<String, FileNameStyle>>,
 }
@@ -112,7 +115,9 @@ field_accessors!(
     symlink_path: Option<Style>,
     control_char: Option<Style>,
     broken_symlink: Option<Style>,
-    broken_path_overlay: Option<Style>
+    broken_path_overlay: Option<Style>,
+    zone_sigil: Option<Style>,
+    zone_sigil_ghost: Option<Style>
 );
 
 #[rustfmt::skip]
@@ -505,6 +510,9 @@ impl UiStyles {
             broken_symlink: Some(Style::default()),
             broken_path_overlay: Some(Style::default()),
 
+            zone_sigil: Some(Style::default()),
+            zone_sigil_ghost: Some(Style::default()),
+
             filenames: None,
             extensions: None,
         }
@@ -625,6 +633,9 @@ impl UiStyles {
             "Sr" => self.security_context().selinux().role  = Some(pair.to_style()),
             "St" => self.security_context().selinux().typ   = Some(pair.to_style()),
             "Sl" => self.security_context().selinux().range = Some(pair.to_style()),
+
+            "zs" => self.zone_sigil                        = Some(pair.to_style()),
+            "zg" => self.zone_sigil_ghost                  = Some(pair.to_style()),
 
              _   => return false,
         }

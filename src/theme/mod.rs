@@ -472,6 +472,8 @@ impl FileNameColours for Theme {
     fn executable_file(&self)     -> Style { self.ui.filekinds.unwrap_or_default().executable() }
     fn mount_point(&self)         -> Style { self.ui.filekinds.unwrap_or_default().mount_point() }
     fn ghost(&self)               -> Style { self.ui.filekinds.unwrap_or_default().ghost() }
+    fn zone_sigil(&self)          -> Style { self.ui.zone_sigil() }
+    fn zone_sigil_ghost(&self)    -> Style { self.ui.zone_sigil_ghost() }
 
     fn colour_file(&self, file: &File<'_>) -> Style {
         self.exts

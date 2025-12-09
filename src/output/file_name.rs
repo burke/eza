@@ -38,6 +38,9 @@ pub struct Options {
 
     /// Whether we are in a console or redirecting the output
     pub is_a_tty: bool,
+
+    /// Whether to suppress zone sigils on directories.
+    pub no_sigils: bool,
 }
 
 impl Options {
@@ -277,6 +280,7 @@ impl<C: Colours> FileName<'_, '_, C> {
                             embed_hyperlinks: EmbedHyperlinks::Off,
                             is_a_tty: self.options.is_a_tty,
                             absolute: Absolute::Off,
+                            no_sigils: self.options.no_sigils,
                         };
 
                         let target_name = FileName {
@@ -322,6 +326,16 @@ impl<C: Colours> FileName<'_, '_, C> {
             if let Some(class) = self.classify_char(self.file) {
                 bits.push(Style::default().paint(class));
             }
+        }
+
+        // Add zone sigil for directories that are zones
+        if !self.options.no_sigils && self.file.is_zone && self.file.is_directory() {
+            let sigil_style = if self.file.is_ghost {
+                self.colours.zone_sigil_ghost()
+            } else {
+                self.colours.zone_sigil()
+            };
+            bits.push(sigil_style.paint("𝜁"));
         }
 
         if self.mount_style == MountStyle::MountInfo {
@@ -534,6 +548,12 @@ pub trait Colours: FiletypeColours {
 
     /// The style to paint a ghost node.
     fn ghost(&self) -> Style;
+
+    /// The style to paint the zone sigil for regular directories.
+    fn zone_sigil(&self) -> Style;
+
+    /// The style to paint the zone sigil for ghost directories.
+    fn zone_sigil_ghost(&self) -> Style;
 
     fn colour_file(&self, file: &File<'_>) -> Style;
 
